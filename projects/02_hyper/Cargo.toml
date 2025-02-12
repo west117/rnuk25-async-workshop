@@ -1,0 +1,9 @@
+[package]
+edition = "2021"
+name = "p02_hyper"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["server", "http1", "http2", "tokio"]}

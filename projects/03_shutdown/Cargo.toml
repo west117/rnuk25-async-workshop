@@ -1,0 +1,10 @@
+[package]
+edition = "2021"
+name = "p03_shutdown"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+anyhow = "1"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["server-auto", "http1", "http2", "tokio", "server-graceful"]}
