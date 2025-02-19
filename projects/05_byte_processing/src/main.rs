@@ -2,10 +2,13 @@
 use axum::{body::Body, routing::get};
 use errors::AppError;
 
-use tokio::net::TcpListener;
+use tokio::{io::simplex, net::TcpListener};
 
 use futures::{SinkExt, TryStreamExt};
-use std::pin::pin;
+use std::{
+    io::{self, Error},
+    pin::pin,
+};
 use tokio_util::{
     codec::{FramedRead, FramedWrite},
     io::{ReaderStream, StreamReader},
@@ -45,5 +48,29 @@ async fn req_handler() -> Result<Body, AppError> {
     // where each string is `format!("{id}: {title}")`.
     // Ideally, do so in a streaming fasion.
 
-    Ok(Body::empty())
+    let stream = prs_resp
+        .into_body()
+        .into_data_stream()
+        .map_err(io::Error::other);
+
+    let reader = StreamReader::new(stream);
+
+    let (rx, tx) = simplex(1024);
+
+    tokio::spawn(async move {
+        let mut frameread = pin!(FramedRead::new(reader, JsonLinesCodec::<PrTitle>::new()));
+        let mut tx = FramedWrite::new(tx, JsonLinesCodec::<String>::new());
+
+        while let Some(msg) = frameread.as_mut().try_next().await.unwrap() {
+            let PrTitle { id, title } = msg;
+            let out_msg = format!("{id}: {title}");
+
+            tx.send(out_msg).await.unwrap();
+        }
+        tx.close().await.unwrap();
+    });
+
+    let rx = ReaderStream::new(rx);
+
+    Ok(Body::from_stream(rx))
 }
