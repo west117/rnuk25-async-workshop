@@ -1,4 +1,4 @@
-use std::{future::Future, time::Duration};
+use std::{future::Future, pin::pin, time::Duration};
 
 use anyhow::anyhow;
 use hyper::{body::Incoming, service::service_fn, Request, Response};
@@ -25,10 +25,10 @@ async fn http_server() -> anyhow::Result<()> {
 
 async fn conn_handler(stream: TcpStream) -> anyhow::Result<()> {
     let builder = hyper_util::server::conn::auto::Builder::new(TaskExecutor {});
-    let conn = builder.serve_connection(
+    let conn = pin!(builder.serve_connection(
         TokioIo::new(stream),
         service_fn(|req| async { req_handler(req).await }),
-    );
+    ));
 
     conn.await.map_err(|e| anyhow!(e))
 }
