@@ -44,7 +44,8 @@ async fn http_server() -> anyhow::Result<()> {
     while let Some(res) = token.run_until_cancelled(listener.accept()).await {
         let (stream, _addr) = res?;
         // spawn and track the task
-        tracker.spawn(conn_handler(stream));
+        let token = token.clone();
+        tracker.spawn(conn_handler(stream, token));
     }
 
     // no more tasks will be spawned.
@@ -54,14 +55,20 @@ async fn http_server() -> anyhow::Result<()> {
     Ok(tracker.wait().await)
 }
 
-async fn conn_handler(stream: TcpStream) -> anyhow::Result<()> {
+async fn conn_handler(stream: TcpStream, token: CancellationToken) -> anyhow::Result<()> {
     let builder = hyper_util::server::conn::auto::Builder::new(TaskExecutor {});
-    let conn = pin!(builder.serve_connection(
+    let mut conn = pin!(builder.serve_connection(
         TokioIo::new(stream),
         service_fn(|req| async { req_handler(req).await }),
     ));
 
-    conn.await.map_err(|e| anyhow!(e))
+    match token.run_until_cancelled(conn.as_mut()).await {
+        Some(res) => res.map_err(|e| anyhow!(e)),
+        None => {
+            conn.as_mut().graceful_shutdown();
+            conn.await.map_err(|e| anyhow!(e))
+        }
+    }
 }
 
 async fn req_handler(req: Request<Incoming>) -> anyhow::Result<Response<String>> {
