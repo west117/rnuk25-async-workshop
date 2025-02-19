@@ -1,7 +1,5 @@
 # Chapter 4 - Concurrency
 
-<!-- JoinSet, TaskTracker, buffered() (FuturesUnordered), etc. -->
-
 Spawning multiple unrelated tasks is one thing,
 but sometimes you want to process multiple related but independant tasks concurrently to reduce latencies.
 Fork-Join, Map-Reduce, whatever you call it, how would be best represent this in async Rust?
@@ -30,7 +28,9 @@ let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 
 for item in items {
     let tx = tx.clone();
-    tokio::spawn(async move { tx.send(handle(item).await) });
+    tokio::spawn(async move {
+        tx.send(handle(item).await)
+    });
 }
 
 drop(tx);
@@ -49,7 +49,9 @@ This is again so common that tokio provides a dedicated utility for this, [`Join
 let mut joinset = JoinSet::new();
 
 for item in items {
-    joinset.spawn(async move { handle(item).await });
+    joinset.spawn(async move {
+        handle(item).await
+    });
 }
 
 let mut responses = vec![]
