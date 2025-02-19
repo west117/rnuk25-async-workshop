@@ -1,6 +1,6 @@
 use axum::routing::get;
 use errors::AppError;
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, task::JoinSet};
 
 mod errors;
 mod slow_api;
@@ -24,15 +24,21 @@ async fn http_server() -> anyhow::Result<()> {
 async fn req_handler() -> Result<String, AppError> {
     println!("received http request");
 
-    let mut output = String::new();
-
     let pulls = slow_api::list_pulls().await?;
-    for pull in pulls {
-        use std::fmt::Write;
 
-        let title = slow_api::get_title(pull).await?;
-        writeln!(&mut output, "{pull}: {title}")?;
+    let mut joinset = JoinSet::new();
+
+    for pull in pulls {
+        joinset.spawn(async move {
+            let title = slow_api::get_title(pull).await.unwrap();
+            format!("{pull}: {title}")
+        });
     }
 
-    Ok(output)
+    let mut responses = vec![];
+    while let Some(Ok(resp)) = joinset.join_next().await {
+        responses.push(resp);
+    }
+
+    Ok(responses.join("\n"))
 }
